@@ -530,6 +530,15 @@ TRITONBACKEND_RequestOutputBufferProperties(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestRelease(
     TRITONBACKEND_Request* request, uint32_t release_flags);
 
+/// Get the trace associted with a request. The returned trace is owned by the
+/// request, not the caller, and so should not be modified or freed.
+///
+/// \param request The inference request.
+/// \param trace Returns the trace associated with the request.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestTrace(
+    TRITONBACKEND_Request* request, TRITONSERVER_InferenceTrace** trace);
+
 ///
 /// TRITONBACKEND_ResponseFactory
 ///
