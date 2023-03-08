@@ -93,7 +93,7 @@ struct TRITONBACKEND_Batcher;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 11
+#define TRITONBACKEND_API_VERSION_MINOR 12
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
