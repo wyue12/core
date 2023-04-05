@@ -31,6 +31,7 @@
 
 #include "backend_config.h"
 #include "backend_model_instance.h"
+#include "device_memory_tracker.h"
 #include "dynamic_batch_scheduler.h"
 #include "filesystem.h"
 #include "model_config_utils.h"
@@ -162,6 +163,8 @@ TritonModel::Create(
         ValidateInstanceGroup(model_config, min_compute_capability));
   }
 
+  DeviceMemoryTracker::ScopedMemoryUsage usage;
+  DeviceMemoryTracker::TrackThreadMemoryUsage(&usage);
   // Create and initialize the model.
   std::unique_ptr<TritonModel> local_model(new TritonModel(
       server, localized_model_dir, backend, min_compute_capability, version,
@@ -257,6 +260,22 @@ TritonModel::Create(
 
   RETURN_IF_ERROR(local_model->SetConfiguredScheduler());
 
+  DeviceMemoryTracker::UntrackThreadMemoryUsage(&usage);
+  LOG_ERROR << "Finished tracking memory usage of model "
+            << model_config.name();
+  for (const auto& mem_usage : usage.system_byte_size_) {
+    LOG_ERROR << "System mem id: " << mem_usage.first
+              << ", byte size: " << mem_usage.second;
+  }
+  for (const auto& mem_usage : usage.pinned_byte_size_) {
+    LOG_ERROR << "System mem id: " << mem_usage.first
+              << ", byte size: " << mem_usage.second;
+  }
+  for (const auto& mem_usage : usage.cuda_byte_size_) {
+    LOG_ERROR << "System mem id: " << mem_usage.first
+              << ", byte size: " << mem_usage.second;
+  }
+
   *model = std::move(local_model);
   return Status::Success;
 }
@@ -272,19 +291,19 @@ TritonModel::ResolveBackendConfigs(
   std::map<std::string, std::string> lconfig;
   if (global_itr != backend_cmdline_config_map.end()) {
     // Accumulate all global settings
-    for (auto& setting : global_itr->second){
+    for (auto& setting : global_itr->second) {
       lconfig[setting.first] = setting.second;
     }
   }
   if (specific_itr != backend_cmdline_config_map.end()) {
     // Accumulate backend specific settings and override
-    // global settings with specific configs if needed 
-    for (auto& setting : specific_itr->second){
+    // global settings with specific configs if needed
+    for (auto& setting : specific_itr->second) {
       lconfig[setting.first] = setting.second;
     }
-  } 
-  for (auto& final_setting : lconfig){
-      config.emplace_back(final_setting);
+  }
+  for (auto& final_setting : lconfig) {
+    config.emplace_back(final_setting);
   }
 
   return Status::Success;
@@ -1229,8 +1248,9 @@ TRITONBACKEND_RequestParameter(
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         ("out of bounds index " + std::to_string(index) +
-            std::string(": request has ") + std::to_string(parameters.size()) +
-            " parameters").c_str());
+         std::string(": request has ") + std::to_string(parameters.size()) +
+         " parameters")
+            .c_str());
   }
 
   const InferenceParameter& param = parameters[index];
@@ -1322,7 +1342,8 @@ TRITONBACKEND_InputBuffer(
   InferenceRequest::Input* ti =
       reinterpret_cast<InferenceRequest::Input*>(input);
   Status status = ti->DataBuffer(
-      index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type, memory_type_id);
+      index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type,
+      memory_type_id);
   if (!status.IsOk()) {
     *buffer = nullptr;
     *buffer_byte_size = 0;
@@ -1362,10 +1383,11 @@ TRITONBACKEND_InputBufferForHostPolicy(
   Status status =
       (host_policy_name == nullptr)
           ? ti->DataBuffer(
-                index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type, memory_type_id)
+                index, buffer, reinterpret_cast<size_t*>(buffer_byte_size),
+                memory_type, memory_type_id)
           : ti->DataBufferForHostPolicy(
-                index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type, memory_type_id,
-                host_policy_name);
+                index, buffer, reinterpret_cast<size_t*>(buffer_byte_size),
+                memory_type, memory_type_id, host_policy_name);
   if (!status.IsOk()) {
     *buffer = nullptr;
     *buffer_byte_size = 0;
